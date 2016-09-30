@@ -98,12 +98,12 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     
     // Accessing bare value to avoid kicking off a premature layout run.
     _toLabelText = NSLocalizedString(@"To:", nil);
-
+    
     self.originalHeight = CGRectGetHeight(self.frame);
-
+    
     // Add invisible text field to handle backspace when we don't have a real first responder.
     [self layoutInvisibleTextField];
-
+    
     [self layoutScrollView];
     [self reloadData];
 }
@@ -147,6 +147,12 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     [self reloadData];
 }
 
+- (void)setAttributedToLabelText:(NSAttributedString *)attributedToLabelText {
+    _toLabelText = attributedToLabelText.string;
+    _attributedToLabelText = attributedToLabelText;
+    [self reloadData];
+}
+
 - (void)setColorScheme:(UIColor *)color
 {
     _colorScheme = color;
@@ -187,11 +193,11 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     [self.collapsedLabel removeFromSuperview];
     self.scrollView.hidden = YES;
     [self setHeight:self.originalHeight];
-
+    
     CGFloat currentX = 0;
     [self layoutToLabelInView:self origin:CGPointMake(self.horizontalInset, self.verticalInset) currentX:&currentX];
     [self layoutCollapsedLabelWithCurrentX:&currentX];
-
+    
     self.tapGestureRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self
                                                                         action:@selector(handleSingleTap:)];
     [self addGestureRecognizer:self.tapGestureRecognizer];
@@ -201,27 +207,31 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
 {
     [self.collapsedLabel removeFromSuperview];
     BOOL inputFieldShouldBecomeFirstResponder = self.inputTextField.isFirstResponder;
-    [self.scrollView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    for (UIView *view in self.scrollView.subviews) {
+        if (view != self.inputTextField) {
+            [view removeFromSuperview];
+        }
+    }
     self.scrollView.hidden = NO;
     [self removeGestureRecognizer:self.tapGestureRecognizer];
-
+    
     self.tokens = [NSMutableArray array];
-
+    
     CGFloat currentX = 0;
     CGFloat currentY = 0;
-
+    
     [self layoutToLabelInView:self.scrollView origin:CGPointZero currentX:&currentX];
     [self layoutTokensWithCurrentX:&currentX currentY:&currentY];
     [self layoutInputTextFieldWithCurrentX:&currentX currentY:&currentY clearInput:shouldAdjustFrame];
-
+    
     if (shouldAdjustFrame) {
         [self adjustHeightForCurrentY:currentY];
     }
-
+    
     [self.scrollView setContentSize:CGSizeMake(self.scrollView.contentSize.width, currentY + [self heightForToken])];
-
+    
     [self updateInputTextField];
-
+    
     if (inputFieldShouldBecomeFirstResponder) {
         [self inputTextFieldBecomeFirstResponder];
     } else {
@@ -244,7 +254,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
                                                     self.verticalInset,
                                                     self.horizontalInset);
     self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
-
+    
     [self addSubview:self.scrollView];
 }
 
@@ -256,14 +266,16 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
         *currentY += [self heightForToken];
         *currentX = 0;
     }
-
+    
     VENBackspaceTextField *inputTextField = self.inputTextField;
     if (clearInput) {
         inputTextField.text = @"";
     }
     inputTextField.frame = CGRectMake(*currentX, *currentY + 1, inputTextFieldWidth, [self heightForToken] - 1);
     inputTextField.tintColor = self.colorScheme;
-    [self.scrollView addSubview:inputTextField];
+    if (inputTextField.superview != self.scrollView) {
+        [self.scrollView addSubview:inputTextField];
+    }
 }
 
 - (void)layoutCollapsedLabelWithCurrentX:(CGFloat *)currentX
@@ -300,18 +312,18 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     for (NSUInteger i = 0; i < [self numberOfTokens]; i++) {
         NSString *title = [self titleForTokenAtIndex:i];
         VENToken *token = [[VENToken alloc] init];
-
+        
         __weak VENToken *weakToken = token;
         __weak VENTokenField *weakSelf = self;
         token.didTapTokenBlock = ^{
             [weakSelf didTapToken:weakToken];
         };
-
+        
         [token setTitleText:[NSString stringWithFormat:@"%@,", title]];
         token.colorScheme = [self colorSchemeForTokenAtIndex:i];
         
         [self.tokens addObject:token];
-
+        
         if (*currentX + token.width <= self.scrollView.contentSize.width) { // token fits in current line
             token.frame = CGRectMake(*currentX, *currentY, token.width, token.height);
         } else {
@@ -342,6 +354,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     [self.invisibleTextField setAutocorrectionType:self.autocorrectionType];
     [self.invisibleTextField setAutocapitalizationType:self.autocapitalizationType];
     self.invisibleTextField.backspaceDelegate = self;
+    [self.invisibleTextField addTarget:self action:@selector(invisibleTextFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
     [self addSubview:self.invisibleTextField];
 }
 
@@ -350,7 +363,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     if (self.inputTextField.isFirstResponder) {
         return;
     }
-
+    
     [self.inputTextField becomeFirstResponder];
     if ([self.delegate respondsToSelector:@selector(tokenFieldDidBeginEditing:)]) {
         [self.delegate tokenFieldDidBeginEditing:self];
@@ -367,7 +380,9 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
         [_toLabel sizeToFit];
         [_toLabel setHeight:[self heightForToken]];
     }
-    if (![_toLabel.text isEqualToString:_toLabelText]) {
+    if (_attributedToLabelText && ![_toLabel.attributedText isEqualToAttributedString:_attributedToLabelText]) {
+        _toLabel.attributedText = _attributedToLabelText;
+    } else if (![_toLabel.text isEqualToString:_toLabelText]) {
         _toLabel.text = _toLabelText;
     }
     return _toLabel;
@@ -449,6 +464,14 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     if ([self.delegate respondsToSelector:@selector(tokenField:didChangeText:)]) {
         [self.delegate tokenField:self didChangeText:textField.text];
     }
+}
+
+- (void)invisibleTextFieldDidChange:(UITextField *)textField
+{
+    _inputTextField.text = [_inputTextField.text?:@"" stringByAppendingString:_invisibleTextField.text];
+    _invisibleTextField.text = nil;
+    [_inputTextField becomeFirstResponder];
+    [self inputTextFieldDidChange:_inputTextField];
 }
 
 - (void)handleSingleTap:(UITapGestureRecognizer *)gestureRecognizer
