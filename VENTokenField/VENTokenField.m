@@ -206,7 +206,6 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
 - (void)layoutTokensAndInputWithFrameAdjustment:(BOOL)shouldAdjustFrame
 {
     [self.collapsedLabel removeFromSuperview];
-    BOOL inputFieldShouldBecomeFirstResponder = self.inputTextField.isFirstResponder;
     for (UIView *view in self.scrollView.subviews) {
         if (view != self.inputTextField) {
             [view removeFromSuperview];
@@ -232,11 +231,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     
     [self updateInputTextField];
     
-    if (inputFieldShouldBecomeFirstResponder) {
-        [self inputTextFieldBecomeFirstResponder];
-    } else {
-        [self focusInputTextField];
-    }
+    [self focusInputTextField];
 }
 
 - (BOOL)isCollapsed
